@@ -1,0 +1,155 @@
+---
+title: "final_project"
+author: "Yu He"
+date: "2023-03-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview of dataset: The Youth Risk Behavior Surveillance System (YRBSS) 2019 high school data for all states
+
+The Youth Risk Behavior Surveillance System (YRBSS) monitors six categories of health-related behaviors that contribute to the leading causes of death and disability among youth and adults, including—
+
+* Behaviors that contribute to unintentional injuries and violence
+* Sexual behaviors related to unintended pregnancy and sexually transmitted diseases, including HIV infection
+* Alcohol and other drug use
+* Tobacco use
+* Unhealthy dietary behaviors
+* Inadequate physical activity
+
+Database website: https://www.cdc.gov/healthyyouth/data/yrbs/index.htm
+
+Codebook for variable included in the dataset -
+
+* sitename - Name of location covered by a survey
+* year - 4-digit year of survey – 1991, 1993, etc
+* weight - Analytical weight – used in statistical analyses
+* age - Data from:
+    How old are you?
+    A. 12 years old or younger
+    B. 13 years old
+    C. 14 years old
+    D. 15 years old
+    E. 16 years old
+    F. 17 years old
+    G. 18 years old or older
+* sex - Data from:
+    What is your sex?
+    A. Female
+    B. Male
+* grade - Data from:
+    In what grade are you?
+    A. 9th grade
+    B. 10th grade
+    C. 11th grade
+    D. 12th grade
+    E. Ungraded or other grade
+* race4 - 4-level variable from race and ethnicity questions:
+    1 = “White”
+    2 = “Black or African American”
+    3 = “Hispanic/Latino”
+    4 = “All Other Races”
+* race7 - 7-level variable from race and ethnicity questions:
+    1 = “American Indian/Alaska Native”
+    2 = “Asian”
+    3 = “Black or African American”
+    4 = “Hispanic/Latino”
+    5 = “Native Hawaiian/Other Pacific Islander”
+    6 = “White”
+    7 = “Multiple Races (Non-Hispanic)”
+* stheight - Data from:
+    How tall are you without your shoes on?
+* bmi - Body mass index (BMI)
+* bmipct - Student’s BMI percentile
+* sexid - Sexual identity:
+    1 = "Heterosexual"
+    2 = "Gay or Lesbian"
+    3 = "Bisexual"
+    4 = "Not Sure"
+* qnfrcig - Currently smoked cigarettes frequently
+* qnothhpl - Used birth control pills; an IUD (such as Mirena or
+    ParaGard) or implant (such as Implanon or
+    Nexplanon); or a shot (such as Depo-Provera), patch
+    (such as OrthoEvra), or birth control ring (such as
+    NuvaRing) before last sexual intercourse
+* qfoodallergy - Food allergies
+* qcurrentasthma - Current asthma
+* qncurrentopioid - Currently took prescription pain medicine without a
+    doctor's prescription or differently than how a doctor
+    told them to use it
+* qnmarijuanaschool - Used marijuana on school property
+
+## load libraries
+```{r}
+library(tidyverse)
+library(haven)
+library(caret)
+library(mice)
+```
+
+## data import and process, save the processed sas7dbat data into csv file to improve R runnig time. Only run one time.
+```{r}
+# set path
+setwd("~/Desktop/CU Spring 2023/P8451 intro to machine learning for EPI/p8451_final_project")
+
+# load state data a_m
+# df_a_m = read_sas("sadc_2019_state_a_m.sas7bdat") %>% 
+#  janitor::clean_names() %>% 
+#  select(sitename, year, weight, age, sex, grade, race4, race7, stheight, bmi, bmipct, qnobese, sexid, qnfrcig, 
+#         qnothhpl, qfoodallergy, qcurrentasthma, qncurrentopioid, qnmarijuanaschool)
+
+# save the data as a CSV file
+# write.csv(df_a_m, "df_a_m.csv", row.names = FALSE)
+
+# load state data n_z
+#df_n_z = read_sas("sadc_2019_state_n_z.sas7bdat") %>% 
+#  janitor::clean_names() %>% 
+#    select(sitename, year, weight, age, sex, grade, race4, race7, stheight, bmi, bmipct, qnobese, sexid, qnfrcig, 
+#         qnothhpl, qfoodallergy, qcurrentasthma, qncurrentopioid, qnmarijuanaschool)
+
+# save the data as a CSV file
+#write.csv(df_n_z, "df_n_z.csv", row.names = FALSE)
+```
+
+## assess the pattern of missing variables
+```{r}
+# load the processed data
+df_part1 = read_csv("df_a_m.csv")
+df_part2 = read_csv("df_n_z.csv")
+
+# merge two dataset
+df_f_project = bind_rows(df_part1, df_part2)
+```
+
+
+```{r}
+# find the number of missing observation in each variables in df_f_project
+colSums(is.na(df_f_project))
+
+# find the proportion of missing observation in each variables in df_f_project
+colMeans(is.na(df_f_project))
+```
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
