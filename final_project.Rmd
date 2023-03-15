@@ -64,24 +64,37 @@ Codebook for variable included in the dataset -
     How tall are you without your shoes on?
 * bmi - Body mass index (BMI)
 * bmipct - Student’s BMI percentile
+* qnobese - 
+    1 = obese (when BMI percentile is at or
+    above the 95th percentile for BMI by age and sex)
+    2 = No
 * sexid - Sexual identity:
     1 = "Heterosexual"
     2 = "Gay or Lesbian"
     3 = "Bisexual"
     4 = "Not Sure"
 * qnfrcig - Currently smoked cigarettes frequently
+    1 = Yes
+    2 = No
 * qnothhpl - Used birth control pills; an IUD (such as Mirena or
     ParaGard) or implant (such as Implanon or
     Nexplanon); or a shot (such as Depo-Provera), patch
     (such as OrthoEvra), or birth control ring (such as
     NuvaRing) before last sexual intercourse
+    1 = Yes
+    2 = No
 * qfoodallergy - Food allergies
-* qcurrentasthma - Current asthma
+    1 = Yes
+    2 = No
+    3 = Not sure
+* qncurrentasthma - Current asthma
+    1 = Yes
+    2 = No
+    3 = Not sure
 * qncurrentopioid - Currently took prescription pain medicine without a
     doctor's prescription or differently than how a doctor
     told them to use it
-* qnmarijuanaschool - Used marijuana on school property
-
+    
 ## load libraries
 ```{r}
 library(tidyverse)
@@ -90,16 +103,17 @@ library(caret)
 library(mice)
 ```
 
-## data import and process, save the processed sas7dbat data into csv file to improve R runnig time. Only run one time.
+
+## Step 1, data import and process, save the processed sas7dbat data into csv file to improve R runnig time. Only run one time.
 ```{r}
 # set path
 setwd("~/Desktop/CU Spring 2023/P8451 intro to machine learning for EPI/p8451_final_project")
 
 # load state data a_m
-# df_a_m = read_sas("sadc_2019_state_a_m.sas7bdat") %>% 
+#df_a_m = read_sas("sadc_2019_state_a_m.sas7bdat") %>% 
 #  janitor::clean_names() %>% 
 #  select(sitename, year, weight, age, sex, grade, race4, race7, stheight, bmi, bmipct, qnobese, sexid, qnfrcig, 
-#         qnothhpl, qfoodallergy, qcurrentasthma, qncurrentopioid, qnmarijuanaschool)
+#         qnothhpl, qfoodallergy, qncurrentasthma, qncurrentopioid)
 
 # save the data as a CSV file
 # write.csv(df_a_m, "df_a_m.csv", row.names = FALSE)
@@ -108,7 +122,7 @@ setwd("~/Desktop/CU Spring 2023/P8451 intro to machine learning for EPI/p8451_fi
 #df_n_z = read_sas("sadc_2019_state_n_z.sas7bdat") %>% 
 #  janitor::clean_names() %>% 
 #    select(sitename, year, weight, age, sex, grade, race4, race7, stheight, bmi, bmipct, qnobese, sexid, qnfrcig, 
-#         qnothhpl, qfoodallergy, qcurrentasthma, qncurrentopioid, qnmarijuanaschool)
+#         qnothhpl, qfoodallergy, qncurrentasthma, qncurrentopioid)
 
 # save the data as a CSV file
 #write.csv(df_n_z, "df_n_z.csv", row.names = FALSE)
@@ -124,22 +138,58 @@ df_part2 = read_csv("df_n_z.csv")
 df_f_project = bind_rows(df_part1, df_part2)
 ```
 
-
 ```{r}
 # find the number of missing observation in each variables in df_f_project
 colSums(is.na(df_f_project))
 
 # find the proportion of missing observation in each variables in df_f_project
 colMeans(is.na(df_f_project))
+
+summary(df_f_project)
 ```
+
+## create new variables and data cleaning
+```{r}
+# 
+df_fit <- 
+  df_f_project %>% 
+  mutate(
+    # create new variable for missing analysis
+    missing_sexid = ifelse(is.na(sexid), 1, 0),
+    missing_qnothhpl = ifelse(is.na(qnothhpl), 1, 0),
+    missing_qfoodallergy = ifelse(is.na(qfoodallergy), 1, 0),
+    missing_qncurrentasthma = ifelse(is.na(qncurrentasthma), 1, 0),
+    missing_qncurrentopioid = ifelse(is.na(qncurrentopioid), 1, 0),
+    # convert variables into factors
+    across(c("age", "sex", "grade", "race4", "race7", "qnobese", "qnfrcig", "missing_sexid", "missing_qnothhpl", 
+             "missing_qfoodallergy", "missing_qncurrentasthma", "missing_qncurrentopioid"), as.factor
+           )
+    ) %>% 
+  select(-c(sexid, qnobese, qnothhpl, qfoodallergy, qncurrentasthma, qncurrentopioid)) %>% 
+  na.omit() 
+  
+# find the number of missing observation in each variables in df_fit
+colSums(is.na(df_fit))
+
+# find the proportion of missing observation in each variables in df_fit
+colMeans(is.na(df_fit))
+
+# check the balance of df_fit, the outcome variable if missing_sexid
+summary(df_fit)
+```
+
+
+## Step 3, Partition data into training and testing sets
 
 ```{r}
-
+set.seed(123)
+training_data <- df_fit$missing_sexid %>% createDataPartition(p = 0.7, list = F)
+train_data <- df_fit[training_data, ]
+test_data <- df_fit[-training_data, ]
 ```
 
-
-
-
+## Step 4, model fitting
+# 
 
 
 
