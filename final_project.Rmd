@@ -165,7 +165,7 @@ df_fit <-
              "missing_qfoodallergy", "missing_qncurrentasthma", "missing_qncurrentopioid"), as.factor
            )
     ) %>% 
-  select(-c(sexid, qnobese, qnothhpl, qfoodallergy, qncurrentasthma, qncurrentopioid)) %>% 
+  select(-c(sitename, year, sexid, qnothhpl, qfoodallergy, qncurrentasthma, qncurrentopioid)) %>% 
   na.omit() 
   
 # find the number of missing observation in each variables in df_fit
@@ -176,6 +176,7 @@ colMeans(is.na(df_fit))
 
 # check the balance of df_fit, the outcome variable if missing_sexid
 summary(df_fit)
+
 ```
 
 
@@ -183,13 +184,115 @@ summary(df_fit)
 
 ```{r}
 set.seed(123)
-training_data <- df_fit$missing_sexid %>% createDataPartition(p = 0.7, list = F)
+training_data <- df_fit$missing_sexid %>% createDataPartition(p = 0.01, list = F)
 train_data <- df_fit[training_data, ]
 test_data <- df_fit[-training_data, ]
 ```
 
 ## Step 4, model fitting
-# 
+# model 1, bagging 
+```{r}
+set.seed(123)
+
+#Set our value for mtry hyperparameter (the number of features eligible for selection at each node)
+
+#Remember, in bagging, all predictor features are eligible for selection at each node
+mtry_val1 <- expand.grid(.mtry = ncol(train_data)-1)
+
+#Just setting 5-fold cross-validation for fast demonstration.
+control_settings <- trainControl(method = "cv", number = 10)
+
+# model fit
+
+model_fit_1 <- train(missing_sexid ~., data = train_data, method = "rf", metric = "Accuracy", 
+                     tuneGrid = mtry_val1, ntree = 100, preProcess = c("center", "scale"), trControl = control_settings)
+
+# visualization and accuracy
+model_fit_1$results
+model_fit_1$bestTune
+
+varImp(model_fit_1)
+plot(varImp(model_fit_1))
+confusionMatrix(model_fit_1)
+```
+
+# model 2, Elastic Net method
+```{r}
+# model 2, chooses alpha and lambda via cross-validation using all of the features - Elastic Net method
+set.seed(123)
+
+# Construct k-folds in your data
+trcontrol = trainControl(method = "cv", number = 10, sampling = "up")
+
+# model 2 fit
+model_fit_2 <- train(
+  missing_sexid ~., data = train_data, method = "glmnet",
+  trControl = trcontrol, preProc=c("center", "scale"), tuneLength = 10, metric = "Accuracy"
+  )
+
+# Print the values of alpha and lambda that gave best prediction
+model_fit_2$bestTune
+
+# Print all of the options examined
+model_fit_2$results
+
+# Model coefficients
+coef(model_fit_2$finalModel, model_fit_2$bestTune$lambda)
+
+
+# visualization and accuracy
+varImp(model_fit_2)
+plot(varImp(model_fit_2))
+confusionMatrix(model_fit_2)
+```
+
+# model 3, random forest
+```{r}
+set.seed(123)
+# Setting 5-fold cross-validation for fast demonstration.
+control_settings<-trainControl(method = "cv", number = 10, sampling = "up")
+
+# Trying three different values of mtry
+mtry_vals_3 <- c(ncol(train_data)-1, sqrt(ncol(train_data)-1), 0.5*ncol(train_data)-1)
+mtry_grid_3 <- expand.grid(.mtry = round(mtry_vals_3))
+
+model_fit_3 <- train(missing_sexid ~., data = train_data, method = "rf", metric = "Accuracy", preProc=c("center", "scale"),
+                     tuneGrid = mtry_grid_3, trControl = control_settings, ntree=200)
+
+confusionMatrix(model_fit_3)
+model_fit_3$results
+model_fit_3$bestTune
+model_fit_3$finalModel
+
+varImp(model_fit_3)
+plot(varImp(model_fit_3))
+
+# varImpPlot(model_fit_3$finalModel)
+```
+
+# model 4 boosting
+```{r}
+set.seed(123)
+
+#First example where all hyperparameters are being held constant,  no cross-validation, using bootstrapping default
+
+model_fit_boosting <- train(missing_sexid ~., data = train_data, method = "gbm", distribution = "bernoulli", verbose = F, tuneGrid = data.frame(.n.trees = 1000, .shrinkage = 0.001, .interaction.depth = 1, .n.minobsinnode = 10))
+
+confusionMatrix(model_fit_boosting)
+
+#Second example where I tune hyperparameters
+set.seed(123)
+
+#only running a few bootstrapped samples
+control.settings<-trainControl(number = 5)
+gbm.hyp <- expand.grid(n.trees = (0:10)*100, shrinkage = c(0.01, 0.001), interaction.depth = c(1,3), n.minobsinnode = 10)
+
+model_fit_boosting_2 <- train(missing_sexid  ~., data = train_data, method = "gbm", distribution = "bernoulli", verbose = F, tuneGrid = gbm.hyp, trControl = control.settings)
+
+confusionMatrix(model_fit_boosting_2)
+# varImp(model_fit_boosting_2)
+```
+
 
 
 
