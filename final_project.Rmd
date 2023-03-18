@@ -100,7 +100,10 @@ Codebook for variable included in the dataset -
 library(tidyverse)
 library(haven)
 library(caret)
-library(mice)
+library(rpart)
+library(rpart.plot)
+library(pROC)
+library(e1071)
 ```
 
 
@@ -153,6 +156,7 @@ summary(df_f_project)
 # 
 df_fit <- 
   df_f_project %>% 
+  filter(year == 2019) %>% 
   mutate(
     # create new variable for missing analysis
     missing_sexid = ifelse(is.na(sexid), 1, 0),
@@ -184,7 +188,7 @@ summary(df_fit)
 
 ```{r}
 set.seed(123)
-training_data <- df_fit$missing_sexid %>% createDataPartition(p = 0.01, list = F)
+training_data <- df_fit$missing_sexid %>% createDataPartition(p = 0.7, list = F)
 train_data <- df_fit[training_data, ]
 test_data <- df_fit[-training_data, ]
 ```
@@ -200,7 +204,7 @@ set.seed(123)
 mtry_val1 <- expand.grid(.mtry = ncol(train_data)-1)
 
 #Just setting 5-fold cross-validation for fast demonstration.
-control_settings <- trainControl(method = "cv", number = 10)
+control_settings <- trainControl(method = "cv", number = 10, sampling = "up")
 
 # model fit
 
@@ -214,6 +218,7 @@ model_fit_1$bestTune
 varImp(model_fit_1)
 plot(varImp(model_fit_1))
 confusionMatrix(model_fit_1)
+
 ```
 
 # model 2, Elastic Net method
@@ -256,8 +261,11 @@ control_settings<-trainControl(method = "cv", number = 10, sampling = "up")
 mtry_vals_3 <- c(ncol(train_data)-1, sqrt(ncol(train_data)-1), 0.5*ncol(train_data)-1)
 mtry_grid_3 <- expand.grid(.mtry = round(mtry_vals_3))
 
-model_fit_3 <- train(missing_sexid ~., data = train_data, method = "rf", metric = "Accuracy", preProc=c("center", "scale"),
-                     tuneGrid = mtry_grid_3, trControl = control_settings, ntree=200)
+model_fit_3 <- train(
+  missing_sexid ~., data = train_data, method = "rf", metric = "Accuracy",         
+  preProc=c("center", "scale"), tuneGrid = mtry_grid_3, trControl = control_settings,  
+  ntree=200
+  )
 
 confusionMatrix(model_fit_3)
 model_fit_3$results
@@ -279,20 +287,153 @@ set.seed(123)
 model_fit_boosting <- train(missing_sexid ~., data = train_data, method = "gbm", distribution = "bernoulli", verbose = F, tuneGrid = data.frame(.n.trees = 1000, .shrinkage = 0.001, .interaction.depth = 1, .n.minobsinnode = 10))
 
 confusionMatrix(model_fit_boosting)
-
+# varImp(model_fit_boosting)
 #Second example where I tune hyperparameters
-set.seed(123)
+#set.seed(123)
 
 #only running a few bootstrapped samples
-control.settings<-trainControl(number = 5)
-gbm.hyp <- expand.grid(n.trees = (0:10)*100, shrinkage = c(0.01, 0.001), interaction.depth = c(1,3), n.minobsinnode = 10)
+#control.settings<-trainControl(number = 5)
+#gbm.hyp <- expand.grid(n.trees = (0:10)*100, shrinkage = c(0.01, 0.001), interaction.depth = #c(1,3), n.minobsinnode = 10)
 
-model_fit_boosting_2 <- train(missing_sexid  ~., data = train_data, method = "gbm", distribution = "bernoulli", verbose = F, tuneGrid = gbm.hyp, trControl = control.settings)
+#model_fit_boosting_2 <- train(missing_sexid  ~., data = train_data, method = "gbm", #distribution = "bernoulli", verbose = F, tuneGrid = gbm.hyp, trControl = control.settings)
 
-confusionMatrix(model_fit_boosting_2)
+#confusionMatrix(model_fit_boosting_2)
 # varImp(model_fit_boosting_2)
 ```
 
+
+# Model 5 lasso
+```{r}
+# model 5, A lasso model using all of the features
+# model 5 fit
+set.seed(123)
+lambda<-10^seq(-3,3, length=100)
+
+# Construct k-folds in your data
+trcontrol = trainControl(method = "CV", number = 10, sampling = "up")
+
+model_fit_5 = train(missing_sexid ~., data = train_data, method = "glmnet", trControl = trcontrol, family = "binomial", tuneGrid = expand.grid(alpha = 1, lambda = lambda))
+
+summary(model_fit_5)
+
+confusionMatrix(model_fit_5)
+```
+
+
+# Model 5 classfication Tree model
+```{r}
+set.seed(123)
+
+#Using 10-fold cross-validation to train model
+train_control_tree <- trainControl(method = "cv", number = 10, sampling = "down")
+
+#Create sequence of cp parameters to try 
+grid_1 <- expand.grid(cp = seq(0.001, 0.3, by = 0.01))
+
+#Using rpart method to generate regression tree, using all variables in dataset to predict life expectancy
+model_fit_6 <- train(missing_sexid ~ . , data = train_data, method = "rpart", trControl = train_control_tree, tuneGrid = grid_1)
+
+model_fit_6$bestTune
+model_fit_6$results
+
+#Can use rpart.plot function to visualize tree
+rpart.plot(model_fit_6$finalModel)
+
+#Note you can obtain variable importance on the final model within training data
+varImp(model_fit_6)
+
+
+confusionMatrix(model_fit_6)
+```
+
+
+## Step 5, Model evaluation and optimal model selection based on accuracy
+```{r}
+# Model 1
+train_outcome_1 <- predict(model_fit_1, train_data)
+
+model_train_eval_1 = confusionMatrix(train_outcome_1, train_data$missing_sexid, positive = "0")
+
+# Model 2
+train_outcome_2 <- predict(model_fit_2, train_data)
+
+model_train_eval_2 = confusionMatrix(train_outcome_2, train_data$missing_sexid, positive = "0")
+
+# Model 3
+train_outcome_3 <- predict(model_fit_3, train_data)
+
+model_train_eval_3 = confusionMatrix(train_outcome_3, train_data$missing_sexid, positive = "0")
+
+# Model boosting
+train_outcome_4 <- predict(model_fit_boosting, train_data)
+
+model_train_eval_4 = confusionMatrix(train_outcome_4, train_data$missing_sexid, positive = "0")
+
+# lasso
+train_outcome_5 <- predict(model_fit_5, train_data)
+
+model_train_eval_5 = confusionMatrix(train_outcome_5, train_data$missing_sexid, positive = "0")
+
+# classfication Tree model
+train_outcome_6 <- predict(model_fit_6, train_data)
+
+model_train_eval_6 = confusionMatrix(train_outcome_6, train_data$missing_sexid, positive = "0")
+
+model_train_eval_1
+model_train_eval_2
+model_train_eval_3
+model_train_eval_4
+model_train_eval_5
+model_train_eval_6
+
+compare_resamp <- resamples(list(
+  bagging = model_fit_1,
+  elastic_net = model_fit_2,
+  random_forest = model_fit_3,
+# boosting = mode_fit_4,
+  lasso = model_fit_5,
+  classification_tree = model_fit_6
+))
+
+summary(compare_resamp)
+dotplot(compare_resamp)
+
+# create table of accuracy and kappa
+postResample(train_outcome_1, train_data$missing_sexid)
+postResample(train_outcome_2, train_data$missing_sexid)
+postResample(train_outcome_3, train_data$missing_sexid)
+postResample(train_outcome_4, train_data$missing_sexid)
+postResample(train_outcome_5, train_data$missing_sexid)
+postResample(train_outcome_6, train_data$missing_sexid)
+
+# All the evaluation parameters show that the performances of random forest model and bagging model are very close and better than the elastic net model. Based on Accuracy, the random forest model is slightly better. So the final choice of model is the random forest model.
+```
+
+
+## Step 6, the performance of final model within test dataset
+```{r}
+# Model 2, the final model - random forest model.
+test_outcome_3 <- predict(model_fit_3, test_data)
+
+model_eval_3 = confusionMatrix(test_outcome_3, test_data$missing_sexid, positive = "0")
+
+model_eval_3
+
+postResample(test_outcome_3, test_data$missing_sexid)
+
+# Find the features that are most important for the prediction
+varImp(model_fit_3)
+plot(varImp(model_fit_3))
+
+# varImpPlot(model_fit_3$finalModel)
+
+# Based on the optimized model (random forest), the most important feature for the model includes:
+# weight
+# missing_qfoodallergy
+# bmipct
+# bmi
+# shtight
+```
 
 
 
